@@ -3,6 +3,8 @@ use futures_util::{future, pin_mut, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, info};
 
+use crate::types::{construct_ask_args, Tone};
+
 mod types;
 
 const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -57,9 +59,23 @@ async fn main() -> Result<()> {
     info!("Conversation signature: {conversation_signature}");
 
     let url_encoded_ecs = urlencoding::encode(&encrypted_conversation_signature);
-    let (tx, rx) = connect_ws(&format!("{WS_URL}?sec_access_token={url_encoded_ecs}")).await?;
+    let (tx, mut rx) = connect_ws(&format!("{WS_URL}?sec_access_token={url_encoded_ecs}")).await?;
     _ = tx.unbounded_send(Message::Text(format!(
         "{{\"protocol\":\"json\",\"version\":1}}{DELIMETER}"
+    )));
+
+    rx.recv().await;
+    let ask_args = construct_ask_args(
+        "Test",
+        0,
+        Tone::Precise,
+        conversation_signature,
+        &client_id,
+        &conversation_id,
+    );
+    _ = tx.unbounded_send(Message::Text(format!(
+        "{}{DELIMETER}",
+        ask_args.to_string()
     )));
 
     tokio::signal::ctrl_c().await?;
@@ -71,12 +87,12 @@ pub async fn connect_ws(
     url: &str,
 ) -> Result<(
     futures_channel::mpsc::UnboundedSender<Message>,
-    futures_channel::mpsc::UnboundedReceiver<Message>,
+    tokio::sync::mpsc::UnboundedReceiver<Message>,
 )> {
     let (ws_stream, _) = connect_async(url).await?;
 
     let (tx_write, rx_write) = futures_channel::mpsc::unbounded();
-    let (tx_read, rx_read) = futures_channel::mpsc::unbounded();
+    let (tx_read, rx_read) = tokio::sync::mpsc::unbounded_channel();
     let (write, read) = ws_stream.split();
 
     tokio::task::spawn(async move {
@@ -85,7 +101,7 @@ pub async fn connect_ws(
             read.for_each(|msg| async {
                 if let Ok(msg) = msg {
                     debug!("WS msg: {msg:?}");
-                    _ = tx_read.unbounded_send(msg);
+                    _ = tx_read.send(msg);
                 }
             })
         };

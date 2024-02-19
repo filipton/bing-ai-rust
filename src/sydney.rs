@@ -12,6 +12,8 @@ const BUNDLE_VERSION: &str = "1.1586.1";
 const DELIMETER: &str = "\x1E";
 
 pub struct BingAIWs {
+    client: reqwest::Client,
+
     invocation_id: i64,
     tone: Tone,
 
@@ -30,6 +32,7 @@ impl BingAIWs {
     pub async fn new(tone: Tone) -> Result<Self> {
         let client = reqwest::ClientBuilder::new()
             .user_agent(USER_AGENT)
+            .cookie_store(true)
             .build()?;
 
         let res = client
@@ -74,6 +77,8 @@ impl BingAIWs {
         debug!("Encrypted conversation signature: {encrypted_conversation_signature}");
 
         Ok(Self {
+            client,
+
             invocation_id: 0,
             tone,
 
@@ -245,15 +250,12 @@ impl BingAIWs {
                     // normal text
                     info!("Final text: {}", message["text"]);
 
-                    /*
                     if let Some(ref mut ws) = self.ws {
                         ws.0.close_channel();
                         ws.1.close();
                     }
                     self.ws = None;
-                    */
-
-                    _ = clear_recv_chan(rx).await;
+                    //_ = clear_recv_chan(rx).await;
                     return Ok(());
                 }
             }

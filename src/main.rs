@@ -14,8 +14,6 @@ async fn main() -> Result<()> {
     ai.parse_msgs().await?;
     ai.ask("What is my name?").await?;
     ai.parse_msgs().await?;
-    ai.ask("What is the meaning of my name?").await?;
-    ai.parse_msgs().await?;
 
     tokio::signal::ctrl_c().await?;
     Ok(())

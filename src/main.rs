@@ -13,13 +13,12 @@ async fn main() -> Result<()> {
 
     tracing_subscriber::fmt::init();
     let cookies_str = std::env::var("COOKIES").ok();
-    println!("cookies_str: {:?}", cookies_str);
 
     let mut ai = BingAIWs::new_conversation(types::Tone::Precise, cookies_str.as_deref()).await?;
     //ai.set_citations(true);
     ai.set_close_ws_after(true);
 
-    ai.ask("Write me simple benchmark in rust comparing Vec::new() with Vec::with_capacity()")
+    ai.ask("Tell me about Elon Musk, his controversies, and his companies. Write short sentence.")
         .await?;
 
     /*
@@ -40,10 +39,16 @@ async fn main() -> Result<()> {
             }
             Ok(msgs) => {
                 for msg in msgs {
-                    info!("Response: {:?}", msg);
+                    debug!("Response: {:?}", msg);
 
-                    if let SydneyResponse::FinalText(text) = msg {
-                        println!("{}", text);
+                    match msg {
+                        SydneyResponse::Sources(sources) => {
+                            println!("Sources: {:?}", sources);
+                        }
+                        SydneyResponse::FinalText(text) => {
+                            println!("\n\n{}\n\n", text);
+                        }
+                        _ => {}
                     }
                 }
             }

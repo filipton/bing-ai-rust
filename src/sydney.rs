@@ -38,6 +38,7 @@ pub enum SydneyResponse {
     FinalText(String),
     StreamText(String),
     SuggestedResponses(Vec<String>),
+    Sources(Vec<String>),
 }
 
 #[allow(dead_code)]
@@ -155,6 +156,8 @@ impl BingAIWs {
     }
 
     /// Set whether to include citations in the response. (Like url's etc.)
+    /// Its not working well on larger responses, because orginal creator of sydney.py
+    /// haven't implemented it well. (I'll fix it in the future)
     pub fn set_citations(&mut self, citations: bool) {
         self.citations = citations;
     }
@@ -214,6 +217,7 @@ impl BingAIWs {
             }
 
             let ws_json: serde_json::Value = serde_json::from_str(ws_str)?;
+            //debug!("{ws_json}");
             let typ = ws_json
                 .get("type")
                 .ok_or_else(|| anyhow!("Json type field not found!"))?;
@@ -325,6 +329,20 @@ impl BingAIWs {
                     .get(i)
                     .ok_or_else(|| anyhow!("Message with that idx doesnt exists (impossible)"))?;
 
+                if let Some(sources) = message.get("sourceAttributions") {
+                    let sources: Vec<&str> = sources
+                        .as_array()
+                        .ok_or_else(|| anyhow!("Sources not an array"))?
+                        .iter()
+                        .filter(|s| s["provider"].as_str() == Some("search_web"))
+                        .filter_map(|s| s["seeMoreUrl"].as_str())
+                        .collect();
+
+                    responses.push(SydneyResponse::Sources(
+                        sources.iter().map(|s| s.to_string()).collect(),
+                    ));
+                }
+
                 if self.suggestions {
                     if let Some(suggested_responses) = message.get("suggestedResponses") {
                         let suggested_responses: Vec<&str> = suggested_responses
@@ -341,6 +359,8 @@ impl BingAIWs {
                 }
 
                 if self.citations {
+                    // thats bad - body of adaptive cards is array and message is splitted into
+                    // that array, so it should iterate over that array
                     if let Some(text) = message["adaptiveCards"][0]["body"][0].get("text") {
                         responses.push(SydneyResponse::FinalText(
                             text.as_str()

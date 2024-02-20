@@ -66,8 +66,26 @@ pub struct BingAIWs {
 #[allow(dead_code)]
 impl BingAIWs {
     pub async fn new(tone: Tone) -> Result<Self> {
+        Self::new_conversation(tone, None).await
+    }
+
+    pub async fn new_with_cookies(tone: Tone, cookies: &str) -> Result<Self> {
+        Self::new_conversation(tone, Some(cookies)).await
+    }
+
+    pub async fn new_conversation(tone: Tone, cookies: Option<&str>) -> Result<Self> {
+        let mut headers = reqwest::header::HeaderMap::new();
+
+        if let Some(cookies) = cookies {
+            headers.insert(
+                reqwest::header::COOKIE,
+                reqwest::header::HeaderValue::from_str(cookies)?,
+            );
+        }
+
         let client = reqwest::ClientBuilder::new()
             .user_agent(USER_AGENT)
+            .default_headers(headers)
             .cookie_store(true)
             .build()?;
 
@@ -268,6 +286,8 @@ impl BingAIWs {
                     let result = ws_json["item"]["result"]["value"]
                         .as_str()
                         .unwrap_or("NOT FOUND");
+
+                    debug!("Result: {result}");
 
                     match result {
                         "Throttled" => debug!("Throttled result (type 2 msg)"),

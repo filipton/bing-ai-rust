@@ -1,9 +1,7 @@
+use crate::sydney::SydneyResponse;
 use anyhow::Result;
-use std::time::Instant;
 use sydney::{BingAIWs, SydneyError};
 use tracing::{debug, error, info};
-
-use crate::sydney::SydneyResponse;
 
 mod json;
 mod sydney;
@@ -11,12 +9,18 @@ mod types;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    _ = dotenvy::dotenv();
+
     tracing_subscriber::fmt::init();
-    let mut ai = BingAIWs::new(types::Tone::Precise).await?;
+    let cookies_str = std::env::var("COOKIES").ok();
+    println!("cookies_str: {:?}", cookies_str);
+
+    let mut ai = BingAIWs::new_conversation(types::Tone::Precise, cookies_str.as_deref()).await?;
     //ai.set_citations(true);
     ai.set_close_ws_after(true);
 
-    ai.ask("How can i make simple multi-threaded http server in plain C? DO NOT ANWSER WITH QUESTION. WRITE THE ANWSER ONLY. Use README syntax for codeblocks - code blocks should be inside \"```\" with approtiate language.").await?;
+    ai.ask("Write me simple benchmark in rust comparing Vec::new() with Vec::with_capacity()")
+        .await?;
 
     /*
     let resp = ai.get_final_response().await?;

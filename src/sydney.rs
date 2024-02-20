@@ -4,7 +4,7 @@ use futures_util::{future, pin_mut, StreamExt};
 use serde_json::json;
 use thiserror::Error;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use tracing::{debug, info, trace};
+use tracing::{debug, error, info, trace};
 
 const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const CREATE_URL: &str = "https://www.bing.com/turing/conversation/create";
@@ -160,7 +160,11 @@ impl BingAIWs {
             &self.conversation_id,
         );
 
-        let tx = &self.ws.as_ref().ok_or_else(|| anyhow!("Ws is none"))?.0;
+        let tx = &self
+            .ws
+            .as_ref()
+            .ok_or_else(|| SydneyError::WebSocketNotConnected)?
+            .0;
         send_ws_delim(tx, ask_json)?;
 
         self.invocation_id += 1;
@@ -212,17 +216,29 @@ impl BingAIWs {
 
                     if self.citations {
                         if let Some(text) = adaptive_cards[0]["body"][0].get("text") {
-                            responses.push(SydneyResponse::StreamText(text.to_string()));
+                            responses.push(SydneyResponse::StreamText(
+                                text.as_str()
+                                    .ok_or_else(|| anyhow!("Text isnt a string"))?
+                                    .to_string(),
+                            ));
                         } else {
                             let text = &adaptive_cards[0]["body"][1]["text"];
-                            responses.push(SydneyResponse::StreamText(text.to_string()));
+                            responses.push(SydneyResponse::StreamText(
+                                text.as_str()
+                                    .ok_or_else(|| anyhow!("Text isnt a string"))?
+                                    .to_string(),
+                            ));
                         }
                     }
                 }
 
                 if !self.citations {
                     if let Some(text) = messages[0].get("text") {
-                        responses.push(SydneyResponse::StreamText(text.to_string()));
+                        responses.push(SydneyResponse::StreamText(
+                            text.as_str()
+                                .ok_or_else(|| anyhow!("Text isnt a string"))?
+                                .to_string(),
+                        ));
                     }
                 }
             } else if typ == 2 {
@@ -306,13 +322,25 @@ impl BingAIWs {
 
                 if self.citations {
                     if let Some(text) = message["adaptiveCards"][0]["body"][0].get("text") {
-                        responses.push(SydneyResponse::FinalText(text.to_string()));
+                        responses.push(SydneyResponse::FinalText(
+                            text.as_str()
+                                .ok_or_else(|| anyhow!("Text isnt a string"))?
+                                .to_string(),
+                        ));
                     } else {
                         let text = &message["adaptiveCards"][0]["body"][1]["text"];
-                        responses.push(SydneyResponse::FinalText(text.to_string()));
+                        responses.push(SydneyResponse::FinalText(
+                            text.as_str()
+                                .ok_or_else(|| anyhow!("Text isnt a string"))?
+                                .to_string(),
+                        ));
                     }
                 } else if let Some(text) = message.get("text") {
-                    responses.push(SydneyResponse::FinalText(text.to_string()));
+                    responses.push(SydneyResponse::FinalText(
+                        text.as_str()
+                            .ok_or_else(|| anyhow!("Text isnt a string"))?
+                            .to_string(),
+                    ));
                 }
 
                 if self.close_ws_after {
@@ -331,6 +359,34 @@ impl BingAIWs {
         }
 
         Ok(responses)
+    }
+
+    pub async fn get_final_response(&mut self) -> Result<String> {
+        loop {
+            let res = self.get_next_msgs().await;
+            match res {
+                Err(SydneyError::EndOfResponse) => {
+                    debug!("End of response");
+                    break;
+                }
+                Err(e) => {
+                    error!("Error: {}", e);
+                    break;
+                }
+                Ok(msgs) => {
+                    for msg in msgs {
+                        match msg {
+                            SydneyResponse::FinalText(text) => {
+                                return Ok(text);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        Err(anyhow!("No final message found!"))
     }
 
     async fn connect_ws(&mut self) -> Result<()> {

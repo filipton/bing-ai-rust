@@ -1,6 +1,9 @@
 use anyhow::Result;
+use std::time::Instant;
 use sydney::{BingAIWs, SydneyError};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
+
+use crate::sydney::SydneyResponse;
 
 mod json;
 mod sydney;
@@ -13,7 +16,13 @@ async fn main() -> Result<()> {
     //ai.set_citations(true);
     ai.set_close_ws_after(true);
 
-    ai.ask("What the weather today in Paris?").await?;
+    ai.ask("How can i make simple multi-threaded http server in plain C? DO NOT ANWSER WITH QUESTION. WRITE THE ANWSER ONLY. Use README syntax for codeblocks - code blocks should be inside \"```\" with approtiate language.").await?;
+
+    /*
+    let resp = ai.get_final_response().await?;
+    info!("resp: {resp}");
+    */
+
     loop {
         let res = ai.get_next_msgs().await;
         match res {
@@ -25,8 +34,14 @@ async fn main() -> Result<()> {
                 error!("Error: {}", e);
                 break;
             }
-            Ok(msg) => {
-                println!("Response: {:?}", msg);
+            Ok(msgs) => {
+                for msg in msgs {
+                    info!("Response: {:?}", msg);
+
+                    if let SydneyResponse::FinalText(text) = msg {
+                        println!("{}", text);
+                    }
+                }
             }
         }
     }
@@ -37,6 +52,6 @@ async fn main() -> Result<()> {
     ai.get_next_msg().await?;
     */
 
-    tokio::signal::ctrl_c().await?;
+    //tokio::signal::ctrl_c().await?;
     Ok(())
 }

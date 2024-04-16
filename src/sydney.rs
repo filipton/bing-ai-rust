@@ -71,16 +71,16 @@ impl BingAIWs {
     }
 
     pub async fn new_with_cookies(tone: Tone, cookies: &str) -> Result<Self> {
-        Self::new_conversation(tone, Some(cookies)).await
+        Self::new_conversation(tone, Some(cookies.to_string())).await
     }
 
-    pub async fn new_conversation(tone: Tone, cookies: Option<&str>) -> Result<Self> {
+    pub async fn new_conversation(tone: Tone, cookies: Option<String>) -> Result<Self> {
         let mut headers = reqwest::header::HeaderMap::new();
 
         if let Some(cookies) = cookies {
             headers.insert(
                 reqwest::header::COOKIE,
-                reqwest::header::HeaderValue::from_str(cookies)?,
+                reqwest::header::HeaderValue::from_str(&cookies)?,
             );
         }
 
